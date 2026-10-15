@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#120F2B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Diez Minutos">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Diez Minutos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..700&display=swap">
+<style>
+/* Layout: one-column phone app. Top bar + 5-segment stepper, then the current step as a loteria-style card stage. */
+:root{
+  --bg:#F4F1FB; --surface:#FFFFFF; --ink:#1B1740; --muted:#5D5882; --line:#D9D3EE;
+  --edge:#1B1740; --sun:#F2A900; --sun-ink:#2A1A00; --pink:#D6246E; --teal:#0E9E8B;
+  --good:#0F7D55; --bad:#C62B3A; --card:#FFF3D6;
+  --font-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --font-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#120F2B; --surface:#1D1941; --ink:#F3F0FF; --muted:#A9A3D1; --line:#342E66;
+  --edge:#8F86E8; --sun:#FFB627; --sun-ink:#2A1A00; --pink:#FF6BA6; --teal:#2FD3BC;
+  --good:#3FD99A; --bad:#FF7A86; --card:#2A2358; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#120F2B; --surface:#1D1941; --ink:#F3F0FF; --muted:#A9A3D1; --line:#342E66;
+  --edge:#8F86E8; --sun:#FFB627; --sun-ink:#2A1A00; --pink:#FF6BA6; --teal:#2FD3BC;
+  --good:#3FD99A; --bad:#FF7A86; --card:#2A2358; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-block:0 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-width:0}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.1}
+p{margin:0}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding-top:14px}
+.brand{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.02em}
+.brand span{color:var(--pink)}
+.streak{font-weight:700;font-size:14px;background:var(--surface);border:2px solid var(--edge);border-radius:999px;padding:4px 12px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.steps button{display:flex;flex-direction:column;gap:5px;text-align:left;min-width:0}
+.steps i{display:block;height:6px;border-radius:3px;background:var(--line)}
+.steps b{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps .on i{background:var(--sun)} .steps .on b{color:var(--ink)}
+.steps .done i{background:var(--teal)}
+
+/* generic parts */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 22px;border-radius:16px;font-weight:700;font-size:17px;
+  background:var(--sun);color:var(--sun-ink);border:3px solid var(--edge);box-shadow:4px 4px 0 var(--edge);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--edge)}
+.btn.ghost{background:var(--surface);color:var(--ink)}
+.btn.small{min-height:42px;font-size:15px;padding:0 14px;box-shadow:3px 3px 0 var(--edge)}
+.btn.block{width:100%}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 0;min-width:0}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.panel{background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:16px}
+
+/* loteria card */
+.lota{position:relative;background:var(--card);border:3px solid var(--edge);border-radius:22px;box-shadow:6px 6px 0 var(--edge);
+  padding:18px 16px 0;display:flex;flex-direction:column;align-items:center;text-align:center;overflow:hidden;min-width:0}
+.lnum{position:absolute;top:10px;left:14px;font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--muted)}
+.lreg{position:absolute;top:10px;right:14px;font-size:13px;font-weight:700;color:var(--muted)}
+.lemoji{font-size:clamp(84px,26vw,120px);line-height:1.05;margin-top:10px;transition:transform .25s}
+.lemoji.pop{transform:scale(1.12)}
+.lphrase{font-family:var(--font-display);font-weight:800;font-size:clamp(24px,7vw,32px);letter-spacing:-.01em;line-height:1.15;margin:8px 0 6px;min-height:2.3em;display:flex;flex-wrap:wrap;justify-content:center;gap:0 .3em;text-wrap:balance}
+.lphrase .w{transition:color .12s,filter .2s}
+.lphrase .w.on{color:var(--pink)}
+.lphrase .w.mask{filter:blur(7px)}
+.lphrase.hide{filter:blur(9px);cursor:pointer}
+.len{font-size:16px;color:var(--muted);min-height:1.5em;margin-bottom:14px}
+.lbar{align-self:stretch;margin:0 -16px;padding:9px 0;background:var(--edge);color:var(--bg);font-family:var(--font-display);font-weight:800;letter-spacing:.14em;font-size:15px;text-transform:uppercase}
+.lbar.you{background:var(--pink);color:#fff}
+.lbar.listen{background:var(--teal);color:#0A1F1B}
+.dots{display:flex;justify-content:center;gap:12px;margin-top:2px}
+.dots i{width:16px;height:16px;border-radius:50%;background:var(--line);transition:transform .08s,background .08s}
+.dots i.on{background:var(--sun);transform:scale(1.35)}
+.meta{display:flex;justify-content:space-between;font-size:14px;font-weight:600;color:var(--muted)}
+.ctrl{display:flex;align-items:center;gap:12px}
+.ctrl label{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+.ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--pink)}
+
+/* flashcards / slang */
+.tapcard{cursor:pointer;user-select:none}
+.tapcard .lphrase{min-height:0}
+.hint{font-size:14px;color:var(--muted);padding-bottom:14px}
+.big-x{font-size:17px;margin:2px 0 4px}
+.xes{font-size:15px;color:var(--muted);margin-bottom:14px}
+.chip{display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface);border:2px solid var(--line);color:var(--ink)}
+.pager{display:flex;justify-content:center;gap:8px}
+.pager i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.pager i.on{background:var(--pink)}
+
+/* game */
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.opts.one{grid-template-columns:1fr}
+.opt{background:var(--surface);border:3px solid var(--edge);border-radius:18px;box-shadow:4px 4px 0 var(--edge);min-height:92px;padding:10px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:17px;line-height:1.25;min-width:0;overflow-wrap:anywhere}
+.opt.em{font-size:56px;min-height:110px}
+.opt:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--edge)}
+.opt.right{background:var(--teal);color:#06231E;border-color:var(--edge)}
+.opt.wrong{background:var(--pink);color:#fff;opacity:.9}
+.opt[disabled]{pointer-events:none}
+.q{font-family:var(--font-display);font-weight:800;font-size:clamp(22px,6.4vw,28px);text-align:center;line-height:1.15;text-wrap:balance}
+.bigplay{width:96px;height:96px;border-radius:50%;font-size:40px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:var(--sun);border:3px solid var(--edge);box-shadow:4px 4px 0 var(--edge)}
+.bigplay:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--edge)}
+.progress{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.progress>div{height:100%;background:var(--pink);width:0;transition:width .3s}
+.fb{min-height:56px;text-align:center;font-size:16px}
+.fb b{font-family:var(--font-display);font-size:20px;display:block}
+.slots{min-height:64px;border:3px dashed var(--edge);border-radius:16px;padding:8px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
+.tile{background:var(--surface);border:3px solid var(--edge);border-radius:12px;padding:8px 12px;font-weight:700;font-size:17px;box-shadow:3px 3px 0 var(--edge)}
+.tile.used{opacity:.25;pointer-events:none}
+
+/* final */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}
+.week div{display:flex;flex-direction:column;gap:4px;align-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.week span{width:30px;height:30px;border-radius:50%;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:15px}
+.week .hit span{background:var(--teal);color:#06231E}
+.week .today span{outline:3px solid var(--sun)}
+.stat{font-family:var(--font-display);font-weight:800;font-size:44px;line-height:1}
+.mission{border-left:6px solid var(--pink);padding-left:14px}
+select{font:inherit;width:100%;min-height:48px;border-radius:14px;border:2px solid var(--edge);background:var(--surface);color:var(--ink);padding:0 12px}
+.tl{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none}
+.tl li{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:baseline}
+.tl li:first-child{border-top:0}
+.tl time{font-family:var(--font-display);font-weight:800;color:var(--pink)}
+.tl span{color:var(--muted);font-size:14px}
+.tl strong{display:block;font-size:16px}
+.link{font-size:14px;color:var(--muted);text-decoration:underline;padding:8px}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.shake{animation:shake .25s}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap" id="root">
+  <div class="top"><div class="brand">Diez<span>Minutos</span></div><div class="streak" id="streak">🔥 0</div></div>
+  <nav class="steps" id="steps" aria-label="Pasos"></nav>
+  <main id="app" aria-live="polite"></main>
+</div>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ DATA */
+const REG={MX:"🇲🇽 México",LA:"🌎 Latinoamérica",CO:"🇨🇴 Colombia",AR:"🇦🇷 Argentina",ES:"🇪🇸 España",CR:"🇨🇷 Costa Rica"};
+const LESSONS=[
+{t:"Qué onda",e:"👋",theme:"Meeting people",
+ p:[{es:"¿Qué onda? ¿Cómo andas?",en:"What's up? How are you doing?",e:"👋"},
+    {es:"Mucho gusto, me llamo Chris",en:"Nice to meet you, I'm Chris",e:"🤝"},
+    {es:"¿De dónde eres?",en:"Where are you from?",e:"🌎"},
+    {es:"Soy de Estados Unidos, pero vivo aquí",en:"I'm from the US, but I live here",e:"🏠"}],
+ s:[{es:"¿Qué onda?",en:"What's up?",note:"Everyday greeting with friends. Also works as 'what's going on?'",r:"MX",e:"🤙",x:"¡Qué onda, amigo! ¿Todo bien?",xe:"What's up, friend! All good?"},
+    {es:"Chido",en:"Cool, awesome",note:"Say 'está chido' or 'qué chido'. Very Mexican.",r:"MX",e:"😎",x:"Tu cámara está bien chida.",xe:"Your camera is really cool."},
+    {es:"Órale",en:"Wow / okay / let's go",note:"An all-purpose reaction. Tone tells you the meaning.",r:"MX",e:"🙌",x:"—¿Vamos a la playa? —¡Órale!",xe:"Shall we go to the beach? Let's go!"}],
+ m:"Greet one person today with '¿Qué onda?' and tell them where you're from."},
+{t:"Antojitos",e:"🌮",theme:"Ordering food",
+ p:[{es:"¿Qué me recomienda?",en:"What do you recommend?",e:"🍽️"},
+    {es:"Me da dos tacos al pastor, por favor",en:"Give me two al pastor tacos, please",e:"🌮"},
+    {es:"Con todo, pero sin cilantro",en:"With everything, but no cilantro",e:"🌿"},
+    {es:"La cuenta, por favor",en:"The check, please",e:"🧾"}],
+ s:[{es:"Está bien rico",en:"It's really tasty",note:"'Bien' works like 'very' here. Also 'bien rica' for feminine things.",r:"MX",e:"😋",x:"Esta salsa está bien rica.",xe:"This salsa is really good."},
+    {es:"Provecho",en:"Enjoy your meal",note:"Said to people who are eating, even strangers.",r:"LA",e:"🍴",x:"—¡Provecho! —Gracias, igualmente.",xe:"Enjoy! Thanks, you too."},
+    {es:"Antojo",en:"A craving",note:"'Tengo antojo de…' is how you say you're craving something.",r:"MX",e:"🤤",x:"Tengo antojo de unos tacos.",xe:"I'm craving some tacos."}],
+ m:"Order your next meal entirely in Spanish, and say 'Provecho' to someone nearby."},
+{t:"En la calle",e:"🚕",theme:"Getting around",
+ p:[{es:"¿Cuánto cuesta un taxi al centro?",en:"How much is a taxi downtown?",e:"🚕"},
+    {es:"¿Dónde queda la playa?",en:"Where is the beach?",e:"🏖️"},
+    {es:"Pare aquí, por favor",en:"Stop here, please",e:"🛑"},
+    {es:"Voy tarde, ¿puede ir más rápido?",en:"I'm late, can you go faster?",e:"⏰"}],
+ s:[{es:"Ahorita",en:"Right now (or soon-ish)",note:"Famously vague. 'Ahorita voy' can mean in two minutes or two hours.",r:"MX",e:"⏳",x:"Ahorita te llamo.",xe:"I'll call you in a bit."},
+    {es:"Camión",en:"Bus",note:"In Mexico 'camión' is the city bus. Elsewhere it may mean truck.",r:"MX",e:"🚌",x:"El camión pasa cada diez minutos.",xe:"The bus comes every ten minutes."},
+    {es:"Va",en:"Deal, I'm in",note:"Short for 'va, de acuerdo'. A quick yes.",r:"MX",e:"🤝",x:"—¿Nos vemos a las ocho? —Va.",xe:"See you at eight? Deal."}],
+ m:"Ask someone '¿Dónde queda…?' about a place you already know. Ask anyway."},
+{t:"De compras",e:"🛍️",theme:"Shopping and prices",
+ p:[{es:"¿Cuánto cuesta esto?",en:"How much is this?",e:"🏷️"},
+    {es:"Está muy caro, ¿me hace un descuento?",en:"It's very expensive, can you give me a discount?",e:"💸"},
+    {es:"Solo estoy mirando, gracias",en:"I'm just looking, thanks",e:"👀"},
+    {es:"Me lo llevo",en:"I'll take it",e:"🛍️"}],
+ s:[{es:"Lana",en:"Money",note:"Literally 'wool'. Like saying 'bucks' or 'dough'.",r:"MX",e:"💵",x:"No traigo lana.",xe:"I don't have any cash on me."},
+    {es:"Ni modo",en:"Oh well",note:"What you say when there's nothing to be done.",r:"MX",e:"🤷",x:"Se acabó. Ni modo.",xe:"It's sold out. Oh well."},
+    {es:"Regalado",en:"Dirt cheap",note:"Literally 'given away'. A price so low it's a gift.",r:"LA",e:"🎁",x:"Estaba regalado, lo compré.",xe:"It was dirt cheap, so I bought it."}],
+ m:"Ask a price in a shop or market and say '¿Me hace un descuento?'"},
+{t:"Charla con gente",e:"💬",theme:"Small talk",
+ p:[{es:"¿A qué te dedicas?",en:"What do you do for a living?",e:"💼"},
+    {es:"Trabajo desde casa",en:"I work from home",e:"💻"},
+    {es:"Me encanta la fotografía",en:"I love photography",e:"📷"},
+    {es:"¿Quieres tomar algo?",en:"Want to grab a drink?",e:"🍹"}],
+ s:[{es:"¿Neta?",en:"Really? Seriously?",note:"'La neta' means 'the honest truth'. '¿Neta?' asks if it's true.",r:"MX",e:"🧐",x:"¿Neta? No lo puedo creer.",xe:"Seriously? I can't believe it."},
+    {es:"Qué padre",en:"How cool",note:"Mexican for 'how great'. 'Padrísimo' turns it up.",r:"MX",e:"🤩",x:"¡Qué padre tu cámara!",xe:"Your camera is so cool!"},
+    {es:"No manches",en:"No way!",note:"Friendly surprise. Keep it for friends, not strangers.",r:"MX",e:"😲",x:"¡No manches! ¿En serio?",xe:"No way! Really?"}],
+ m:"Tell someone what you do or what you love, in one Spanish sentence."},
+{t:"Planes",e:"📅",theme:"Making plans",
+ p:[{es:"¿Qué haces hoy?",en:"What are you doing today?",e:"📅"},
+    {es:"Nos vemos a las ocho",en:"See you at eight",e:"🕗"},
+    {es:"Llego en diez minutos",en:"I'll arrive in ten minutes",e:"🏃"},
+    {es:"Se me hizo tarde",en:"I ran late",e:"😅"}],
+ s:[{es:"Al rato",en:"Later",note:"A loose 'later today'. Not a set time.",r:"MX",e:"🕒",x:"Nos vemos al rato.",xe:"See you later."},
+    {es:"Ya mero",en:"Almost there",note:"Used for time, distance and progress.",r:"MX",e:"🏁",x:"Ya mero llego.",xe:"I'm almost there."},
+    {es:"Échale ganas",en:"Give it your all",note:"A friendly push. Literally 'throw some desire at it'.",r:"MX",e:"💪",x:"¡Échale ganas, tú puedes!",xe:"Keep at it, you can do it!"}],
+ m:"Text or tell someone a plan in Spanish: 'Nos vemos a las…'"},
+{t:"Cómo me siento",e:"😴",theme:"Feelings and body",
+ p:[{es:"Estoy cansado",en:"I'm tired",e:"😴"},
+    {es:"Tengo mucha hambre",en:"I'm very hungry",e:"🍚"},
+    {es:"Hoy estoy muy contento",en:"I'm very happy today",e:"😄"},
+    {es:"Tengo sed",en:"I'm thirsty",e:"🥤"}],
+ s:[{es:"Hecho polvo",en:"Totally exhausted",note:"Literally 'made into dust'. Add 'estoy' in front.",r:"LA",e:"🫠",x:"Después de la playa estoy hecho polvo.",xe:"After the beach I'm wiped out."},
+    {es:"Qué flojera",en:"Ugh, can't be bothered",note:"Said when you're too lazy to do something.",r:"MX",e:"🛋️",x:"Qué flojera salir hoy.",xe:"Ugh, I can't be bothered to go out."},
+    {es:"De buenas",en:"In a good mood",note:"'Andar de buenas' is to be in a good mood. The opposite is 'de malas'.",r:"MX",e:"😊",x:"Hoy ando de buenas.",xe:"I'm in a good mood today."}],
+ m:"When someone asks '¿Cómo estás?' answer with something besides 'bien'."},
+{t:"Opiniones",e:"🗣️",theme:"Agreeing and disagreeing",
+ p:[{es:"Me gusta mucho",en:"I like it a lot",e:"👍"},
+    {es:"Tienes razón",en:"You're right",e:"✅"},
+    {es:"No estoy de acuerdo",en:"I don't agree",e:"🙅"},
+    {es:"Depende",en:"It depends",e:"⚖️"}],
+ s:[{es:"Sale",en:"Alright, sounds good",note:"From 'salir', but it simply means 'it's a go'.",r:"MX",e:"🆗",x:"—¿Mañana a las diez? —Sale.",xe:"Tomorrow at ten? Sounds good."},
+    {es:"Aguas",en:"Watch out!",note:"Literally 'waters'. A shout to warn someone.",r:"MX",e:"⚠️",x:"¡Aguas con el escalón!",xe:"Watch the step!"},
+    {es:"Cámara",en:"Okay / sure (or bye)",note:"Very casual and playful. Friends only.",r:"MX",e:"📸",x:"—¿Nos vemos luego? —Cámara.",xe:"See you later? Sure."}],
+ m:"Give one opinion about today's weather or food in Spanish."},
+{t:"Slang del continente",e:"🌎",theme:"Slang across countries",
+ p:[{es:"¿Cómo te va?",en:"How's it going?",e:"🙂"},
+    {es:"Todo bien, gracias",en:"All good, thanks",e:"👌"},
+    {es:"Más o menos",en:"So-so",e:"🫤"},
+    {es:"Ahí vamos",en:"Hanging in there",e:"🚶"}],
+ s:[{es:"Parce",en:"Buddy, pal",note:"Short for 'parcero'. Colombian friendly address.",r:"CO",e:"🇨🇴",x:"¿Qué más, parce?",xe:"What's up, buddy?"},
+    {es:"Che",en:"Hey, dude",note:"Used to get attention or end a sentence. Strongly Argentine.",r:"AR",e:"🇦🇷",x:"Che, ¿vamos a tomar un mate?",xe:"Hey, shall we have a mate?"},
+    {es:"Vale",en:"Okay",note:"Spain's 'okay'. You'll hear it constantly there.",r:"ES",e:"🇪🇸",x:"Vale, nos vemos luego.",xe:"Okay, see you later."},
+    {es:"Pura vida",en:"All good, life is great",note:"Costa Rica's greeting, goodbye and mood in one.",r:"CR",e:"🇨🇷",x:"—¿Cómo estás? —¡Pura vida!",xe:"How are you? Life is great!"}],
+ m:"Use one slang word from a different country on a friend, as a joke."},
+{t:"Salir de noche",e:"🍻",theme:"Going out",
+ p:[{es:"Una cerveza bien fría, por favor",en:"A very cold beer, please",e:"🍺"},
+    {es:"¡Salud!",en:"Cheers!",e:"🥂"},
+    {es:"Otra ronda, por favor",en:"Another round, please",e:"🔁"},
+    {es:"Hoy invito yo",en:"It's on me tonight",e:"💳"}],
+ s:[{es:"Chela",en:"Beer",note:"Mexican slang for a beer. 'Unas chelas' for a few.",r:"MX",e:"🍻",x:"Vamos por unas chelas.",xe:"Let's go get some beers."},
+    {es:"Cruda",en:"Hangover",note:"Mexico's word for it. Spain says 'resaca'.",r:"MX",e:"🤕",x:"Hoy tengo cruda.",xe:"I have a hangover today."},
+    {es:"Echarse un trago",en:"Have a drink",note:"Literally 'throw yourself a drink'.",r:"LA",e:"🥃",x:"Vamos a echarnos un trago.",xe:"Let's go have a drink."}],
+ m:"Order a drink with 'Una… bien fría, por favor' and say '¡Salud!'"},
+{t:"Pedir ayuda",e:"🆘",theme:"When you're lost for words",
+ p:[{es:"¿Me puede ayudar, por favor?",en:"Can you help me, please?",e:"🙋"},
+    {es:"No entiendo, ¿puede hablar más despacio?",en:"I don't understand, can you speak more slowly?",e:"🐢"},
+    {es:"¿Cómo se dice sunset en español?",en:"How do you say 'sunset' in Spanish?",e:"🌅"},
+    {es:"¿Puede repetir, por favor?",en:"Can you repeat that, please?",e:"🔄"}],
+ s:[{es:"¿Mande?",en:"Pardon? / Yes?",note:"The polite Mexican 'what?'. Answers when someone calls you.",r:"MX",e:"👂",x:"¿Mande? No te escuché.",xe:"Pardon? I didn't hear you."},
+    {es:"Ándale",en:"Exactly! / Hurry up",note:"Context decides: agreement, encouragement or urgency.",r:"MX",e:"👉",x:"¡Ándale, así se hace!",xe:"That's it, that's how it's done!"},
+    {es:"Con permiso",en:"Excuse me",note:"Say it when you pass in front of someone or leave a table.",r:"LA",e:"🚶",x:"Con permiso, voy a pasar.",xe:"Excuse me, I'm going to pass."}],
+ m:"Ask '¿Cómo se dice…?' for one word you wanted today."},
+{t:"Vida de playa",e:"🌅",theme:"Beach town life",
+ p:[{es:"¿A qué hora es la puesta del sol?",en:"What time is sunset?",e:"🌅"},
+    {es:"Hoy hace un calor tremendo",en:"It's really hot today",e:"☀️"},
+    {es:"El mar está tranquilo hoy",en:"The sea is calm today",e:"🌊"},
+    {es:"Me voy a tomar unas fotos",en:"I'm going to take some photos",e:"📷"}],
+ s:[{es:"Calorón",en:"Scorching heat",note:"From 'calor' plus the big ending '-ón'. Say '¡Qué calorón!'",r:"MX",e:"🥵",x:"¡Qué calorón hace hoy!",xe:"It's scorching today!"},
+    {es:"Chamba",en:"Work, a job",note:"Everyday Mexican for work. 'Chambear' is the verb.",r:"MX",e:"🛠️",x:"Mañana tengo mucha chamba.",xe:"I have a lot of work tomorrow."},
+    {es:"Qué chulada",en:"How beautiful!",note:"Warm word for anything lovely. Perfect for sunsets.",r:"MX",e:"😍",x:"¡Qué chulada de atardecer!",xe:"What a gorgeous sunset!"}],
+ m:"Compliment a view or a photo with '¡Qué chulada!'"},
+{t:"Contar el día",e:"⏪",theme:"Telling stories in the past",
+ p:[{es:"Ayer fui a la playa",en:"Yesterday I went to the beach",e:"🏖️"},
+    {es:"Comí unos tacos buenísimos",en:"I ate some amazing tacos",e:"🌮"},
+    {es:"Conocí a una persona muy simpática",en:"I met a really nice person",e:"🙋‍♀️"},
+    {es:"Tomé muchas fotos",en:"I took a lot of photos",e:"📸"}],
+ s:[{es:"Me cayó bien",en:"I liked them",note:"About a person: they made a good impression. 'Me cayó mal' is the opposite.",r:"LA",e:"👍",x:"Tu amigo me cayó muy bien.",xe:"I really liked your friend."},
+    {es:"Padrísimo",en:"Super cool",note:"'Padre' with the superlative '-ísimo'.",r:"MX",e:"🤩",x:"¡Estuvo padrísimo!",xe:"It was super cool!"},
+    {es:"Estuvo de lujo",en:"It was fantastic",note:"Literally 'it was luxury'.",r:"LA",e:"✨",x:"La cena estuvo de lujo.",xe:"Dinner was fantastic."}],
+ m:"Tell someone one thing you did yesterday, in the past tense."}
+];
+const N=LESSONS.length;
+
+/* ------------------------------------------------------------------ STATE */
+const KEY="diezMinutos.v1";
+let S={hist:[]};
+try{const raw=localStorage.getItem(KEY); if(raw) S=Object.assign({hist:[]},JSON.parse(raw));}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>{const x=new Date(d);return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate())};
+const today=()=>ymd(Date.now());
+const doneToday=()=>S.hist.some(h=>h.d===today());
+function streak(){
+  const days=new Set(S.hist.map(h=>h.d)); let n=0; let d=new Date();
+  if(!days.has(ymd(d))) d.setDate(d.getDate()-1);
+  while(days.has(ymd(d))){n++; d.setDate(d.getDate()-1);}
+  return n;
+}
+let override=null;                       /* lesson picked from the menu this session */
+function curIdx(){
+  if(override!==null) return override;
+  return doneToday()? ((S.hist[S.hist.length-1].l)%N) : (S.hist.length%N);
+}
+function prevIdx(){
+  const c=curIdx();
+  if(override===null && S.hist.length===0) return null;
+  return (c-1+N)%N;
+}
+const L=()=>LESSONS[curIdx()];
+
+/* ------------------------------------------------------------------ HELPERS */
+const $=s=>document.querySelector(s);
+const app=$("#app");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+
+/* ------------------------------------------------------------------ VOICE */
+let voices=[];
+function loadVoices(){try{voices=(speechSynthesis.getVoices()||[]).filter(v=>/^es/i.test(v.lang))}catch(e){}}
+try{loadVoices(); speechSynthesis.onvoiceschanged=loadVoices;}catch(e){}
+function pickVoice(){return voices.find(v=>/es[-_]MX/i.test(v.lang))||voices.find(v=>/es[-_]US/i.test(v.lang))||voices[0]}
+function say(text,rate){
+  try{
+    if(!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="es-MX"; const v=pickVoice(); if(v) u.voice=v;
+    u.rate=rate||0.85;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function hush(){try{speechSynthesis.cancel()}catch(e){}}
+
+/* ------------------------------------------------------------------ AUDIO / BEAT */
+let ctx=null, master=null, noiseBuf=null;
+function ensureCtx(){
+  if(!ctx){
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return false;
+    ctx=new AC();
+    const comp=ctx.createDynamicsCompressor();
+    master=ctx.createGain(); master.gain.value=.8;
+    master.connect(comp); comp.connect(ctx.destination);
+    noiseBuf=ctx.createBuffer(1,ctx.sampleRate*0.5,ctx.sampleRate);
+    const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  if(ctx.state==="suspended") ctx.resume();
+  return true;
+}
+function env(g,t,vol,dur){g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0008,t+dur)}
+function kick(t){const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(48,t+.13);env(g,t,.95,.28);o.connect(g).connect(master);o.start(t);o.stop(t+.3)}
+function noise(t,dur,type,freq,vol){const s=ctx.createBufferSource();s.buffer=noiseBuf;const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=ctx.createGain();env(g,t,vol,dur);s.connect(f).connect(g).connect(master);s.start(t);s.stop(t+dur+.02)}
+function tone(t,freq,dur,vol,type){const o=ctx.createOscillator(),g=ctx.createGain();o.type=type||"triangle";o.frequency.value=freq;env(g,t,vol,dur);o.connect(g).connect(master);o.start(t);o.stop(t+dur+.02)}
+function snare(t){noise(t,.16,"bandpass",1900,.55);tone(t,190,.1,.25,"triangle")}
+function hat(t,v){noise(t,.05,"highpass",7500,v||.14)}
+/* Original loop, 96 BPM dembow in A minor: Am - F - C - G. A 3-3-2 marimba hook rides on top of a tresillo bass. */
+const ROOTS=[110,87.31,130.81,98];
+const HOOK=[ /* [16th step, semitones from A4] per bar */
+  [[0,7],[3,7],[6,5],[8,3],[10,5],[12,7],[14,7]],
+  [[0,3],[3,3],[6,0],[8,3],[10,5],[12,8],[14,5]],
+  [[0,7],[3,7],[6,5],[8,3],[10,5],[12,7],[14,3]],
+  [[0,5],[3,5],[6,2],[8,5],[10,7],[12,10],[14,7]]];
+const TRIAD=[[0,3,7],[-4,0,3],[-9,-5,-2],[-2,2,5]];   /* chord tones in semitones from A4 (lower octave) */
+const hz=n=>440*Math.pow(2,n/12);
+function mallet(t,f,vol,dur){dur=dur||.38;const o=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain(),g2=ctx.createGain();
+  o.type="sine";o.frequency.value=f;o2.type="sine";o2.frequency.value=f*4;env(g,t,vol,dur);env(g2,t,vol*.4,.07);
+  o.connect(g).connect(master);o2.connect(g2).connect(master);o.start(t);o2.start(t);o.stop(t+dur+.02);o2.stop(t+.1)}
+function bass(t,f,dur){const o=ctx.createOscillator(),o2=ctx.createOscillator(),fl=ctx.createBiquadFilter(),g=ctx.createGain();
+  o.type="sawtooth";o.frequency.value=f;o2.type="sine";o2.frequency.value=f;fl.type="lowpass";
+  fl.frequency.setValueAtTime(900,t);fl.frequency.exponentialRampToValueAtTime(200,t+dur);env(g,t,.42,dur);
+  o.connect(fl).connect(g).connect(master);o2.connect(g).connect(master);o.start(t);o2.start(t);o.stop(t+dur+.02);o2.stop(t+dur+.02)}
+function clap(t){noise(t,.12,"bandpass",1500,.35);noise(t+.012,.1,"bandpass",2400,.25)}
+const Beat={bpm:96,running:false,step:0,bar:0,next:0,timer:null,onBar:null,onBeat:null,
+  start(){ if(!ensureCtx()) return; this.stop(); master.gain.value=.85; this.running=true; this.step=0; this.bar=0; this.next=ctx.currentTime+.15; this.timer=setInterval(()=>this.tick(),25)},
+  stop(){ this.running=false; clearInterval(this.timer); this.timer=null },
+  barDur(){return 240/this.bpm},
+  tick(){
+    while(this.next<ctx.currentTime+.12){
+      this.play(this.step,this.next,this.bar);
+      this.step=(this.step+1)%16; if(this.step===0) this.bar++;
+      this.next+=60/this.bpm/4;
+    }
+  },
+  play(step,t,bar){
+    const cb=(fn,...a)=>{ if(fn) setTimeout(()=>{ if(this.running) fn(...a) },Math.max(0,(t-ctx.currentTime)*1000)) };
+    const c=bar%4, r=ROOTS[c], sw=(step%2===1)?.012:0;           /* light swing on the off 16ths */
+    /* dembow drums */
+    if(step%4===0) kick(t);
+    if([3,6,11,14].includes(step)){ snare(t); if(step===3||step===11) clap(t) }
+    hat(t+sw, step%4===0?.07:step%2===0?.13:.09);
+    if(step===14) noise(t,.18,"highpass",6000,.12);               /* open hat pickup */
+    /* tresillo bass */
+    if(step===0) bass(t,r,.5);
+    if(step===6) bass(t,r,.3);
+    if(step===10) bass(t,r*1.5,.3);
+    if(step===14 && bar%2===1) bass(t,r*2,.18);
+    /* strummed chord on beats 1 and 3 */
+    if(step===0||step===8) TRIAD[c].forEach((n,k)=>tone(t+k*.012,hz(n),.45,.07,"triangle"));
+    /* the hook */
+    HOOK[c].forEach(([s,n])=>{ if(s===step) mallet(t,hz(n),s===0?.3:.24) });
+    if(step%4===0) cb(this.onBeat,step/4,bar,t);
+    if(step===0) cb(this.onBar,bar,t);
+  }
+};
+function sfx(ok){ if(!ensureCtx()) return; const t=ctx.currentTime;
+  if(ok){tone(t,660,.15,.2,"sine");tone(t+.09,880,.22,.2,"sine");tone(t+.18,1320,.3,.12,"sine")} else {tone(t,220,.25,.22,"sawtooth");tone(t+.1,165,.3,.2,"sawtooth")} }
+
+/* ------------------------------------------------------------------ STEPPER */
+const STEPS=[
+  {k:"warm",n:"Repaso",min:"1½"},{k:"chant",n:"Ritmo",min:"3"},
+  {k:"slang",n:"Slang",min:"2"},{k:"game",n:"Juego",min:"2½"},{k:"end",n:"Cierre",min:"1"}];
+let step=-1;                              /* -1 = home */
+const maxStep=()=>STEPS.length-1;
+function leave(){ Beat.stop(); hush(); cancelAnimationFrame(raf); }
+function go(i){
+  leave(); step=i; window.scrollTo(0,0);
+  renderSteps();
+  if(i<0) return home();
+  ({warm:warm,chant:chant,slang:slang,game:game,end:finish})[STEPS[i].k]();
+}
+function renderSteps(){
+  const el=$("#steps");
+  el.innerHTML=STEPS.map((s,i)=>`<button data-i="${i}" class="${i===step?"on":i<step?"done":""}" aria-label="${s.n}, ${s.min} min"><i></i><b>${s.n}</b></button>`).join("");
+  el.hidden = step<0;
+  el.querySelectorAll("button").forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $("#streak").textContent="🔥 "+streak();
+}
+const nextBtn=(label)=>`<button class="btn block" id="next">${label||"Siguiente"} →</button>`;
+function wireNext(){const b=$("#next"); if(b) b.onclick=()=>go(step+1)}
+function cardHTML({num,emoji,es,en,bar,barCls,reg,id}){
+  return `<div class="lota" ${id?`id="${id}"`:""}>
+    <div class="lnum">${num??""}</div><div class="lreg">${reg||""}</div>
+    <div class="lemoji" id="lem">${emoji}</div>
+    <div class="lphrase" id="lph">${es||""}</div>
+    <div class="len" id="len">${en||""}</div>
+    ${bar?`<div class="lbar ${barCls||""}" id="lbar">${bar}</div>`:""}</div>`;
+}
+const wordsHTML=(t,mask)=>t.split(" ").map((w,i)=>`<span class="w ${mask&&i%2?"mask":""}">${esc(w)}</span>`).join("");
+
+/* ------------------------------------------------------------------ HOME */
+function home(){
+  const l=L(), i=curIdx(), done=doneToday();
+  const tl=[["1½","Calentar","Flip yesterday's picture cards"],["3","Ritmo","Chant 4 phrases over a beat"],["2","Slang","3 expressions, with examples"],["2½","Juego","Quick-fire listening and builder"],["1","Cierre","Today's real-life mission"]];
+  app.innerHTML=`<div class="wrap" style="gap:16px">
+    <div class="lota"><div class="lnum">${pad(i+1)}</div><div class="lreg">${done?"✅ hoy listo":"hoy"}</div>
+      <div class="lemoji">${l.e}</div>
+      <div class="lphrase" style="min-height:0;margin-bottom:2px">${esc(l.t)}</div>
+      <div class="len">${esc(l.theme)} · día ${S.hist.length+(done?0:1)}</div>
+      <div class="lbar">Diez minutos</div></div>
+    <button class="btn block" id="go">${done?"Practicar otra vez":"Empezar"} ▶</button>
+    <ol class="tl panel" style="padding:6px 16px">${tl.map(t=>`<li><time>${t[0]}′</time><div><strong>${t[1]}</strong><span>${t[2]}</span></div></li>`).join("")}</ol>
+    <div class="panel"><div class="kicker" style="margin-bottom:8px">Otra lección</div>
+      <select id="pick" aria-label="Elegir lección">${LESSONS.map((x,k)=>`<option value="${k}" ${k===i?"selected":""}>${pad(k+1)} · ${x.e} ${esc(x.t)}</option>`).join("")}</select></div>
+    <p class="muted" style="font-size:14px">Use headphones or turn the volume up. On iPhone, switch off silent mode so the beat plays. Tip: add this page to your Home Screen for one-tap access.</p>
+  </div>`;
+  $("#go").onclick=()=>{ensureCtx();go(0)};
+  $("#pick").onchange=e=>{override=+e.target.value;home()};
+  renderSteps();
+}
+
+/* ------------------------------------------------------------------ 1 · CALENTAR */
+function warm(){
+  const i=curIdx(), pi=prevIdx(), first=pi===null;
+  let cards=first? L().p.map(x=>({...x,from:"hoy"})) : LESSONS[pi].p.map(x=>({...x,from:"ayer"}));
+  const older=shuffle(LESSONS.filter((_,k)=>k!==i&&k!==pi&&k<(S.hist.length||0)).flatMap(l=>l.p)).slice(0,2);
+  cards=cards.concat(older.map(x=>({...x,from:"antes"})));
+  let k=0, shown=false;
+  const draw=()=>{
+    const c=cards[k];
+    app.innerHTML=`<div class="wrap">
+      <div class="meta"><span>${first?"Primer vistazo":"Repaso"}</span><span>${k+1} / ${cards.length}</span></div>
+      <div class="lota tapcard" id="card" role="button" tabindex="0" aria-label="Voltear tarjeta">
+        <div class="lnum">${k+1}</div><div class="lreg">${c.from}</div>
+        <div class="lemoji" id="lem">${c.e}</div>
+        <div class="lphrase" id="lph" style="${shown?"":"visibility:hidden"}">${esc(c.es)}</div>
+        <div class="len" id="len" style="${shown?"":"visibility:hidden"}">${esc(c.en)}</div>
+        <div class="lbar" id="lbar">${shown?"Toca para escuchar":"¿Qué dice? Toca para ver"}</div></div>
+      ${shown?`<div class="row"><button class="btn ghost" id="again">Otra vez</button><button class="btn" id="know">Lo sé ✓</button></div>`
+             :`<p class="muted" style="text-align:center">Say it out loud first. Then tap the card.</p>`}
+      <div class="pager">${cards.map((_,j)=>`<i class="${j===k?"on":""}"></i>`).join("")}</div></div>`;
+    const card=$("#card");
+    card.onclick=()=>{ if(!shown){shown=true;draw();say(c.es)} else say(c.es) };
+    card.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();card.onclick()}};
+    if(shown){
+      $("#again").onclick=()=>{cards.push(cards.splice(k,1)[0]); shown=false; draw()};
+      $("#know").onclick=()=>{ k++; shown=false; if(k>=cards.length) return warmDone(); draw()};
+    }
+  };
+  const warmDone=()=>{
+    hush();
+    app.innerHTML=`<div class="wrap">${cardHTML({emoji:"🔥",es:"Ya estás caliente",en:"Warmed up. Now the fun part: music.",bar:"Siguiente: ritmo"})}${nextBtn("Al ritmo")}</div>`;
+    wireNext();
+  };
+  draw();
+}
+
+/* ------------------------------------------------------------------ 2 · RITMO */
+let raf=0;
+function chant(){
+  const ph=L().p, ROUNDS=6;
+  app.innerHTML=`<div class="wrap">
+    <div class="meta"><span>Ronda <b id="rnd">1</b> / ${ROUNDS}</span><span id="tl">4 frases</span></div>
+    ${cardHTML({num:"",emoji:L().e,es:wordsHTML("Toca ▶ y sigue el ritmo"),en:"Listen on the green bar, say it on the pink bar. Same pause after every phrase.",bar:"Listo?",barCls:""})}
+    <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+    <div class="row"><button class="btn" id="play">▶ Dale</button><button class="btn ghost" id="peek">👁 Ver texto</button></div>
+    <div class="ctrl panel"><label for="bpm">Tempo <span id="bv">96</span></label><input type="range" id="bpm" min="72" max="116" value="96"></div>
+    ${nextBtn("Siguiente: slang")}</div>`;
+  wireNext();
+  /* Timing is driven by the phrase itself, not by bars: every card gets the same pause after the
+     voice (listen) and after your turn, so long phrases are no longer rushed and short ones no longer drag. */
+  const GAP=1.0, RATE=.85, total=ROUNDS*ph.length;
+  let started=false, phase="idle", idx=0, t0=0, peek=false, cur=ph[0], round=0, voiceEnd=null, said=false;
+  const durs={};                                              /* measured speech length per phrase */
+  const est=t=>durs[t]??(0.45+t.length*0.072*(0.85/RATE));
+  const clock=()=>performance.now()/1000;
+  const lph=$("#lph"), len=$("#len"), lem=$("#lem"), lbar=$("#lbar"), lnum=document.querySelector(".lnum");
+  const dots=[...document.querySelectorAll("#dots i")];
+  const paint=()=>{
+    const mask = round>=3 && round<5, hideAll = round>=5 && !peek;
+    lph.innerHTML=wordsHTML(cur.es,mask); lph.classList.toggle("hide",hideAll);
+    len.textContent=cur.en; len.style.visibility=(round<2||peek)?"visible":"hidden";
+  };
+  $("#peek").onclick=()=>{peek=!peek; $("#peek").textContent=peek?"🙈 Ocultar":"👁 Ver texto"; if(started&&phase!=="idle"&&phase!=="count")paint()};
+  $("#bpm").oninput=e=>{Beat.bpm=+e.target.value; $("#bv").textContent=e.target.value};
+  Beat.onBeat=(b)=>{dots.forEach((d,j)=>d.classList.toggle("on",j===b))};
+  Beat.onBar=null;
+  const showCard=()=>{
+    round=Math.floor(idx/ph.length); cur=ph[idx%ph.length];
+    $("#rnd").textContent=round+1; $("#tl").textContent="Frase "+(idx%ph.length+1)+" / "+ph.length; lnum.textContent=idx%ph.length+1;
+    lem.textContent=cur.e; lem.classList.add("pop"); setTimeout(()=>lem.classList.remove("pop"),180);
+    paint();
+  };
+  const startPhase=(ph2)=>{
+    phase=ph2; t0=clock(); voiceEnd=null; said=false;
+    if(ph2==="count"){ lbar.textContent="Cuenta…"; lbar.className="lbar"; lph.classList.remove("hide"); lph.innerHTML=wordsHTML("1 · 2 · 3 · 4"); len.style.visibility="hidden"; lem.textContent="🥁"; return; }
+    if(idx>=total){ return finish(); }
+    if(ph2==="listen"){
+      showCard(); lbar.textContent="Escucha 👂"; lbar.className="lbar listen";
+      if(master) master.gain.setTargetAtTime(.5,ctx.currentTime,.05);
+    } else {
+      lbar.textContent="Tu turno 🎤"; lbar.className="lbar you";
+      if(master) master.gain.setTargetAtTime(.9,ctx.currentTime,.05);
+    }
+  };
+  const speakNow=()=>{
+    said=true; const t=cur.es, started0=clock(); let fired=false;
+    const done=()=>{ if(fired) return; fired=true; durs[t]=Math.max(.6,clock()-started0); voiceEnd=clock(); };
+    try{
+      if(!("speechSynthesis" in window)) throw 0;
+      speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang="es-MX"; const v=pickVoice(); if(v)u.voice=v; u.rate=RATE;
+      u.onend=done; u.onerror=done; speechSynthesis.speak(u);
+    }catch(e){ setTimeout(done,est(t)*1000) }
+    setTimeout(done,(est(t)*2+1.5)*1000);                     /* safety net if the browser never reports the end */
+  };
+  const loop=()=>{
+    if(!Beat.running){ return; }
+    const now=clock(), el=now-t0;
+    if(phase==="count"){ if(el>=240/Beat.bpm){ idx=0; startPhase("listen") } }
+    else if(phase==="listen"){
+      if(!said && el>=0.35) speakNow();                       /* land the voice just after the card appears */
+      lph.querySelectorAll(".w.on").forEach(w=>w.classList.remove("on"));
+      if(voiceEnd!==null && now-voiceEnd>=GAP) startPhase("you");
+    } else if(phase==="you"){
+      const speakT=est(cur.es)*1.1, p=clamp(el/speakT,0,1);
+      const ws=[...lph.querySelectorAll(".w")], lens=ws.map(w=>w.textContent.length+1), tot=lens.reduce((x,y)=>x+y,0);
+      let acc=0; ws.forEach((w,j)=>{ w.classList.toggle("on", p*tot>=acc+lens[j]*0.5); acc+=lens[j]; });
+      if(el>=speakT+GAP){ idx++; startPhase(idx>=total?"done":"listen") }
+    }
+    raf=requestAnimationFrame(loop);
+  };
+  function finish(){
+    Beat.stop(); hush(); cancelAnimationFrame(raf); started=false; phase="idle";
+    dots.forEach(d=>d.classList.remove("on"));
+    lem.textContent="🎉"; lph.classList.remove("hide"); lph.innerHTML=wordsHTML("¡Qué padre, lo lograste!"); len.style.visibility="visible"; len.textContent="Four phrases, six rounds. Say them again in the shower.";
+    lbar.textContent="Listo"; lbar.className="lbar listen"; $("#play").textContent="▶ Otra vez"; sfx(true); buzz(60);
+    idx=0;
+  }
+  $("#play").onclick=()=>{
+    if(Beat.running){ Beat.stop(); hush(); cancelAnimationFrame(raf); $("#play").textContent="▶ Seguir"; lbar.textContent="Pausa"; lbar.className="lbar"; return; }
+    ensureCtx(); Beat.bpm=+$("#bpm").value; Beat.start();
+    const resume=started && (phase==="listen"||phase==="you");
+    started=true; $("#play").textContent="⏸ Pausa";
+    startPhase(resume?phase:"count");
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+  };
+}
+
+/* ------------------------------------------------------------------ 3 · SLANG */
+function slang(){
+  const list=L().s; let k=0;
+  const draw=()=>{
+    const s=list[k];
+    app.innerHTML=`<div class="wrap">
+      <div class="meta"><span>Expresión ${k+1} / ${list.length}</span><span>${REG[s.r]||s.r}</span></div>
+      <div class="lota" id="card"><div class="lnum">${k+1}</div><div class="lreg">${REG[s.r]||""}</div>
+        <div class="lemoji">${s.e}</div>
+        <div class="lphrase" style="min-height:0;margin-bottom:2px">${esc(s.es)}</div>
+        <div class="len" style="font-weight:700;color:var(--ink);margin-bottom:6px">${esc(s.en)}</div>
+        <div class="muted" style="font-size:14px;padding:0 4px 12px">${esc(s.note)}</div>
+        <div class="lbar">En la calle</div></div>
+      <div class="panel"><div class="kicker">Úsalo así</div>
+        <p class="big-x"><b>${esc(s.x)}</b></p><p class="xes">${esc(s.xe)}</p>
+        <div class="row"><button class="btn small" id="s1">🔊 Normal</button><button class="btn small ghost" id="s2">🐢 Lento</button><button class="btn small ghost" id="s3">🔁 Ritmo</button></div></div>
+      <div class="pager">${list.map((_,j)=>`<i class="${j===k?"on":""}"></i>`).join("")}</div>
+      <div class="row">${k>0?`<button class="btn ghost" id="prev">← Atrás</button>`:""}<button class="btn" id="nx">${k<list.length-1?"Otra expresión →":"Al juego →"}</button></div></div>`;
+    $("#s1").onclick=()=>say(s.x,.88);
+    $("#s2").onclick=()=>say(s.x,.6);
+    $("#s3").onclick=()=>{ /* say the slang 3 times in a bouncy beat */
+      Beat.stop(); ensureCtx(); let n=0; const t0=ctx.currentTime;
+      const tick=()=>{ if(n>=3) return; kick(ctx.currentTime); snare(ctx.currentTime+.32); say(s.es,.8); n++; setTimeout(tick,1500) }; tick(); };
+    $("#nx").onclick=()=>{ if(k<list.length-1){k++;draw();say(list[k].es,.8)} else go(step+1) };
+    const pv=$("#prev"); if(pv) pv.onclick=()=>{k--;draw()};
+    $("#card").onclick=()=>say(s.es,.8);
+  };
+  draw(); say(list[0].es,.8);
+}
+
+/* ------------------------------------------------------------------ 4 · JUEGO */
+function game(){
+  const l=L(), pi=prevIdx(), P=pi===null?null:LESSONS[pi];
+  const allP=LESSONS.flatMap(x=>x.p), allS=LESSONS.flatMap(x=>x.s);
+  const tp=shuffle(l.p), pp=shuffle(P?P.p:l.p), ts=shuffle(l.s), ps=shuffle(P?P.s:l.s);
+  const longest=l.p.slice().sort((a,b)=>b.es.split(" ").length-a.es.split(" ").length);
+  const pLong=(P?P.p:l.p).filter(x=>x.es.split(" ").length>=3);
+  let qs=[
+    {t:"listen",a:tp[0]},{t:"listen",a:tp[1]},{t:"listen",a:pp[0]},
+    {t:"emoji",a:tp[2]},{t:"emoji",a:tp[3]},{t:"emoji",a:pp[1]||tp[0]},
+    {t:"slang",a:ts[0]},{t:"slang",a:ps[0]},
+    {t:"build",a:longest[0]},{t:"build",a:pLong.length?pLong[Math.floor(Math.random()*pLong.length)]:longest[1]}
+  ];
+  qs=shuffle(qs);
+  let qi=0, score=0, combo=0, best=0;
+  const distinct=(arr,key,n,exclude)=>{const seen=new Set([exclude]);const out=[];for(const x of shuffle(arr)){if(seen.has(x[key]))continue;seen.add(x[key]);out.push(x);if(out.length===n)break}return out};
+  const header=()=>`<div class="progress"><div style="width:${(qi/qs.length)*100}%"></div></div>
+    <div class="meta"><span>Pregunta ${qi+1} / ${qs.length}</span><span>${combo>1?"🔥 x"+combo:"Puntos "+score}</span></div>`;
+  const reveal=(ok,a,extra)=>{
+    if(ok){score++;combo++;best=Math.max(best,combo)}else combo=0;
+    sfx(ok); buzz(ok?30:[40,40,40]);
+    const fb=$("#fb"); fb.innerHTML=`<b style="color:${ok?"var(--good)":"var(--bad)"}">${ok?["¡Eso!","¡Exacto!","¡Ándale!","¡Padre!"][Math.floor(Math.random()*4)]:"Casi"}</b>${extra||""}`;
+    $("#after").innerHTML=nextBtn(qi<qs.length-1?"Siguiente":"Ver resultado"); $("#next").onclick=()=>{qi++;qi<qs.length?ask():results()};
+    setTimeout(()=>say(a.es,.85),ok?350:150);
+  };
+  const ask=()=>{
+    const q=qs[qi], a=q.a; hush();
+    if(q.t==="listen"){
+      const opts=shuffle([a,...distinct(allP,"e",3,a.e)]);
+      app.innerHTML=`<div class="wrap">${header()}<div class="q">Escucha y elige la imagen</div>
+        <button class="bigplay" id="rep" aria-label="Escuchar">🔊</button>
+        <div class="opts">${opts.map((o,j)=>`<button class="opt em" data-j="${j}" aria-label="opción ${j+1}">${o.e}</button>`).join("")}</div>
+        <div class="fb" id="fb"></div><div id="after"></div></div>`;
+      $("#rep").onclick=()=>say(a.es,.8); setTimeout(()=>say(a.es,.8),250);
+      document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+        const ok=opts[+b.dataset.j]===a; mark(b,ok,opts.findIndex(o=>o===a)); reveal(ok,a,`<span class="muted">${esc(a.es)}<br>${esc(a.en)}</span>`)});
+    }
+    if(q.t==="emoji"){
+      const opts=shuffle([a,...distinct(allP.filter(p=>p.es!==a.es),"es",3,a.es)]);
+      app.innerHTML=`<div class="wrap">${header()}<div class="q">¿Cómo se dice?</div>
+        ${cardHTML({emoji:a.e,es:"",en:esc(a.en),bar:"Elige la frase"}).replace('class="lphrase" id="lph"','class="lphrase" id="lph" style="display:none"')}
+        <div class="opts one">${opts.map((o,j)=>`<button class="opt" data-j="${j}">${esc(o.es)}</button>`).join("")}</div>
+        <div class="fb" id="fb"></div><div id="after"></div></div>`;
+      document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+        const ok=opts[+b.dataset.j]===a; mark(b,ok,opts.findIndex(o=>o===a)); reveal(ok,a,"")});
+    }
+    if(q.t==="slang"){
+      const opts=shuffle([a,...distinct(allS.filter(s=>s.en!==a.en),"en",3,a.en)]);
+      app.innerHTML=`<div class="wrap">${header()}<div class="q">¿Qué significa?</div>
+        ${cardHTML({emoji:a.e,es:esc(a.es),en:REG[a.r]||"",bar:"Slang"})}
+        <div class="opts one">${opts.map((o,j)=>`<button class="opt" data-j="${j}">${esc(o.en)}</button>`).join("")}</div>
+        <div class="fb" id="fb"></div><div id="after"></div></div>`;
+      $("#lph").style.minHeight="0"; say(a.es,.8);
+      document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+        const ok=opts[+b.dataset.j]===a; mark(b,ok,opts.findIndex(o=>o===a)); reveal(ok,{es:a.x},`<span class="muted">${esc(a.x)}<br>${esc(a.xe)}</span>`)});
+    }
+    if(q.t==="build"){
+      const words=a.es.split(" "); let tiles=shuffle(words.map((w,j)=>({w,j,used:false}))); let ans=[];
+      if(tiles.map(t=>t.w).join(" ")===a.es) tiles.reverse();
+      app.innerHTML=`<div class="wrap">${header()}<div class="q">Arma la frase</div>
+        <div class="panel" style="text-align:center"><div style="font-size:48px;line-height:1.1">${a.e}</div><div class="muted">${esc(a.en)}</div></div>
+        <div class="slots" id="slots" aria-label="Tu frase"></div>
+        <div class="row" id="tiles" style="justify-content:center;flex-wrap:wrap"></div>
+        <div class="fb" id="fb"></div><div id="after"></div></div>`;
+      const draw=()=>{
+        $("#slots").innerHTML=ans.map((t,x)=>`<button class="tile" data-x="${x}">${esc(t.w)}</button>`).join("");
+        $("#tiles").innerHTML=tiles.map((t,x)=>`<button class="tile ${t.used?"used":""}" data-t="${x}" style="flex:0 0 auto">${esc(t.w)}</button>`).join("");
+        document.querySelectorAll("#tiles .tile").forEach(b=>b.onclick=()=>{const t=tiles[+b.dataset.t]; t.used=true; ans.push(t); say(t.w,.8); draw(); if(ans.length===words.length) check()});
+        document.querySelectorAll("#slots .tile").forEach(b=>b.onclick=()=>{const t=ans.splice(+b.dataset.x,1)[0]; t.used=false; draw()});
+      };
+      const check=()=>{
+        const ok=ans.map(t=>t.w).join(" ")===a.es;
+        document.querySelectorAll(".tile").forEach(b=>b.style.pointerEvents="none");
+        $("#slots").classList.add(ok?"x":"shake");
+        reveal(ok,a,`<span class="muted">${esc(a.es)}</span>`);
+      };
+      draw();
+    }
+  };
+  const mark=(btn,ok,rightIdx)=>{
+    const all=[...document.querySelectorAll(".opt")]; all.forEach(b=>b.disabled=true);
+    btn.classList.add(ok?"right":"wrong"); if(!ok){all[rightIdx].classList.add("right"); btn.classList.add("shake")}
+  };
+  const results=()=>{
+    hush(); cancelAnimationFrame(raf);
+    const pct=score/qs.length, msg=pct>=.9?["🏆","¡Eres una máquina!"]:pct>=.7?["🌟","¡Muy bien!"]:pct>=.5?["💪","¡Vas bien!"]:["🌱","Mañana lo repites y sube"];
+    app.innerHTML=`<div class="wrap">${cardHTML({emoji:msg[0],es:esc(msg[1]),en:`${score} de ${qs.length} correctas · mejor racha ${best}`,bar:"Juego listo"})}${nextBtn("Cierre del día")}</div>`;
+    wireNext(); sfx(true);
+  };
+  ask();
+}
+
+/* ------------------------------------------------------------------ 5 · CIERRE */
+function finish(){
+  const l=L(); hush();
+  if(!doneToday()){ S.hist.push({d:today(),l:curIdx()}); save(); }
+  const days=new Set(S.hist.map(h=>h.d)); const wd="LMXJVSD"; const week=[];
+  for(let k=6;k>=0;k--){const d=new Date(); d.setDate(d.getDate()-k); const key=ymd(d); const idx=(d.getDay()+6)%7;
+    week.push(`<div class="${days.has(key)?"hit":""} ${k===0?"today":""}"><span>${days.has(key)?"✓":""}</span>${wd[idx]}</div>`)}
+  const nx=LESSONS[(S.hist.length)%N];
+  app.innerHTML=`<div class="wrap">
+    ${cardHTML({emoji:"🎊",es:"¡Cumpliste hoy!",en:`Día ${S.hist.length} · racha de ${streak()}`,bar:"Diez minutos"})}
+    <div class="panel mission"><div class="kicker">Misión de hoy</div><p style="font-size:18px;font-weight:600;margin-top:4px">${esc(l.m)}</p></div>
+    <div class="panel"><div class="kicker" style="margin-bottom:10px">Esta semana</div><div class="week">${week.join("")}</div></div>
+    <div class="panel"><div class="kicker">Mañana</div><p style="font-weight:700;font-size:18px;margin-top:2px">${nx.e} ${esc(nx.t)}</p><p class="muted">${esc(nx.theme)}</p></div>
+    <button class="btn block" id="again">Repetir el ritmo del día</button>
+    <div style="text-align:center"><button class="link" id="reset">Borrar mi progreso</button></div></div>`;
+  $("#again").onclick=()=>go(1);
+  let armed=false; $("#reset").onclick=()=>{ if(!armed){armed=true; $("#reset").textContent="Toca otra vez para confirmar"; return} S={hist:[]}; save(); override=null; go(-1)};
+  renderSteps();
+}
+
+/* ------------------------------------------------------------------ BOOT */
+$(".brand").onclick=()=>go(-1);
+go(-1);
+</script>
+
+<script>if("serviceWorker" in navigator){addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}</script>
+</body></html>
