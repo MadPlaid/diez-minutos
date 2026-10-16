@@ -77,7 +77,7 @@ p{margin:0}
 .lphrase .w{transition:color .12s,filter .2s}
 .lphrase .w.on{color:var(--pink)}
 .lphrase .w.mask{filter:blur(7px)}
-.lphrase.hide{filter:blur(9px);cursor:pointer}
+.lphrase.hide,.len.hide{filter:blur(9px)}
 .len{font-size:16px;color:var(--muted);min-height:1.5em;margin-bottom:14px}
 .lbar{align-self:stretch;margin:0 -16px;padding:9px 0;background:var(--edge);color:var(--bg);font-family:var(--font-display);font-weight:800;letter-spacing:.14em;font-size:15px;text-transform:uppercase}
 .lbar.you{background:var(--pink);color:#fff}
@@ -497,25 +497,27 @@ function chant(){
     <div class="meta"><span>Ronda <b id="rnd">1</b> / ${ROUNDS}</span><span id="tl">4 frases</span></div>
     ${cardHTML({num:"",emoji:L().e,es:wordsHTML("Toca ▶ y sigue el ritmo"),en:"Listen on the green bar, say it on the pink bar. Same pause after every phrase.",bar:"Listo?",barCls:""})}
     <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
-    <div class="row"><button class="btn" id="play">▶ Dale</button><button class="btn ghost" id="peek">👁 Ver texto</button></div>
+    <div class="row"><button class="btn" id="play">▶ Dale</button><button class="btn ghost" id="peek" aria-pressed="false">🙈 Modo reto</button></div>
     <div class="ctrl panel"><label for="bpm">Tempo <span id="bv">96</span></label><input type="range" id="bpm" min="72" max="116" value="96"></div>
     ${nextBtn("Siguiente: slang")}</div>`;
   wireNext();
   /* Timing is driven by the phrase itself, not by bars: every card gets the same pause after the
      voice (listen) and after your turn, so long phrases are no longer rushed and short ones no longer drag. */
   const GAP=1.0, RATE=.85, total=ROUNDS*ph.length;
-  let started=false, phase="idle", idx=0, t0=0, peek=false, cur=ph[0], round=0, voiceEnd=null, said=false;
+  let started=false, phase="idle", idx=0, t0=0, challenge=false, cur=ph[0], round=0, voiceEnd=null, said=false, speakStart=0;
   const durs={};                                              /* measured speech length per phrase */
   const est=t=>durs[t]??(0.45+t.length*0.072*(0.85/RATE));
   const clock=()=>performance.now()/1000;
   const lph=$("#lph"), len=$("#len"), lem=$("#lem"), lbar=$("#lbar"), lnum=document.querySelector(".lnum");
   const dots=[...document.querySelectorAll("#dots i")];
+  /* Spanish and English always show. "Modo reto" is an optional switch that blurs both, and one variable drives it. */
   const paint=()=>{
-    const mask = round>=3 && round<5, hideAll = round>=5 && !peek;
-    lph.innerHTML=wordsHTML(cur.es,mask); lph.classList.toggle("hide",hideAll);
-    len.textContent=cur.en; len.style.visibility=(round<2||peek)?"visible":"hidden";
+    lph.innerHTML=wordsHTML(cur.es,false); len.textContent=cur.en; len.style.visibility="visible";
+    lph.classList.toggle("hide",challenge); len.classList.toggle("hide",challenge);
   };
-  $("#peek").onclick=()=>{peek=!peek; $("#peek").textContent=peek?"🙈 Ocultar":"👁 Ver texto"; if(started&&phase!=="idle"&&phase!=="count")paint()};
+  const setChallenge=v=>{ challenge=v; const b=$("#peek"); b.textContent=v?"👁 Ver texto":"🙈 Modo reto"; b.setAttribute("aria-pressed",String(v));
+    if(phase!=="idle"&&phase!=="count"){ lph.classList.toggle("hide",v); len.classList.toggle("hide",v) } };
+  $("#peek").onclick=()=>setChallenge(!challenge);
   $("#bpm").oninput=e=>{Beat.bpm=+e.target.value; $("#bv").textContent=e.target.value};
   Beat.onBeat=(b)=>{dots.forEach((d,j)=>d.classList.toggle("on",j===b))};
   Beat.onBar=null;
@@ -527,7 +529,7 @@ function chant(){
   };
   const startPhase=(ph2)=>{
     phase=ph2; t0=clock(); voiceEnd=null; said=false;
-    if(ph2==="count"){ lbar.textContent="Cuenta…"; lbar.className="lbar"; lph.classList.remove("hide"); lph.innerHTML=wordsHTML("1 · 2 · 3 · 4"); len.style.visibility="hidden"; lem.textContent="🥁"; return; }
+    if(ph2==="count"){ lbar.textContent="Cuenta…"; lbar.className="lbar"; lph.classList.remove("hide"); len.classList.remove("hide"); lph.innerHTML=wordsHTML("1 · 2 · 3 · 4"); len.style.visibility="hidden"; lem.textContent="🥁"; return; }
     if(idx>=total){ return finish(); }
     if(ph2==="listen"){
       showCard(); lbar.textContent="Escucha 👂"; lbar.className="lbar listen";
@@ -538,14 +540,20 @@ function chant(){
     }
   };
   const speakNow=()=>{
-    said=true; const t=cur.es, started0=clock(); let fired=false;
-    const done=()=>{ if(fired) return; fired=true; durs[t]=Math.max(.6,clock()-started0); voiceEnd=clock(); };
+    said=true; const t=cur.es, started0=clock(); speakStart=started0; let fired=false;
+    const done=(err)=>{
+      if(fired) return; fired=true;
+      const m=clock()-started0;
+      if(err && /interrupted|canceled/.test(String(err.error||""))) return;        /* a cancel is not the end of the phrase */
+      if(m<est(t)*0.6){ voiceEnd=started0+est(t); return }                         /* ended too fast to be real speech */
+      durs[t]=Math.min(m,est(t)*2); voiceEnd=clock();
+    };
     try{
       if(!("speechSynthesis" in window)) throw 0;
       speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang="es-MX"; const v=pickVoice(); if(v)u.voice=v; u.rate=RATE;
-      u.onend=done; u.onerror=done; speechSynthesis.speak(u);
-    }catch(e){ setTimeout(done,est(t)*1000) }
-    setTimeout(done,(est(t)*2+1.5)*1000);                     /* safety net if the browser never reports the end */
+      u.onend=()=>done(); u.onerror=e=>done(e); speechSynthesis.speak(u);
+    }catch(e){ setTimeout(()=>done(),est(t)*1000) }
+    setTimeout(()=>done(),(est(t)*2+1.5)*1000);                                    /* safety net if the browser never reports the end */
   };
   const loop=()=>{
     if(!Beat.running){ return; }
@@ -554,7 +562,7 @@ function chant(){
     else if(phase==="listen"){
       if(!said && el>=0.35) speakNow();                       /* land the voice just after the card appears */
       lph.querySelectorAll(".w.on").forEach(w=>w.classList.remove("on"));
-      if(voiceEnd!==null && now-voiceEnd>=GAP) startPhase("you");
+      if(voiceEnd!==null && now-Math.max(voiceEnd,speakStart+est(cur.es)*0.9)>=GAP) startPhase("you");
     } else if(phase==="you"){
       const speakT=est(cur.es)*1.1, p=clamp(el/speakT,0,1);
       const ws=[...lph.querySelectorAll(".w")], lens=ws.map(w=>w.textContent.length+1), tot=lens.reduce((x,y)=>x+y,0);
@@ -566,7 +574,7 @@ function chant(){
   function finish(){
     Beat.stop(); hush(); cancelAnimationFrame(raf); started=false; phase="idle";
     dots.forEach(d=>d.classList.remove("on"));
-    lem.textContent="🎉"; lph.classList.remove("hide"); lph.innerHTML=wordsHTML("¡Qué padre, lo lograste!"); len.style.visibility="visible"; len.textContent="Four phrases, six rounds. Say them again in the shower.";
+    lem.textContent="🎉"; lph.classList.remove("hide"); len.classList.remove("hide"); lph.innerHTML=wordsHTML("¡Qué padre, lo lograste!"); len.style.visibility="visible"; len.textContent="Four phrases, six rounds. Say them again in the shower.";
     lbar.textContent="Listo"; lbar.className="lbar listen"; $("#play").textContent="▶ Otra vez"; sfx(true); buzz(60);
     idx=0;
   }
