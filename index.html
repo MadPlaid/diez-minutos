@@ -458,7 +458,7 @@ function warm(){
   let cards=first? L().p.map(x=>({...x,from:"hoy"})) : LESSONS[pi].p.map(x=>({...x,from:"ayer"}));
   const older=shuffle(LESSONS.filter((_,k)=>k!==i&&k!==pi&&k<(S.hist.length||0)).flatMap(l=>l.p)).slice(0,2);
   cards=cards.concat(older.map(x=>({...x,from:"antes"})));
-  let k=0, shown=false;
+  let k=0, shown=first;
   const draw=()=>{
     const c=cards[k];
     app.innerHTML=`<div class="wrap">
@@ -467,17 +467,18 @@ function warm(){
         <div class="lnum">${k+1}</div><div class="lreg">${c.from}</div>
         <div class="lemoji" id="lem">${c.e}</div>
         <div class="lphrase" id="lph" style="${shown?"":"visibility:hidden"}">${esc(c.es)}</div>
-        <div class="len" id="len" style="${shown?"":"visibility:hidden"}">${esc(c.en)}</div>
-        <div class="lbar" id="lbar">${shown?"Toca para escuchar":"¿Qué dice? Toca para ver"}</div></div>
+        <div class="len" id="len">${esc(c.en)}</div>
+        <div class="lbar" id="lbar">${shown?"Toca para escuchar 🔊":"Dilo en español, luego toca"}</div></div>
       ${shown?`<div class="row"><button class="btn ghost" id="again">Otra vez</button><button class="btn" id="know">Lo sé ✓</button></div>`
-             :`<p class="muted" style="text-align:center">Say it out loud first. Then tap the card.</p>`}
+             :`<p class="muted" style="text-align:center">Use the picture and the English to say it in Spanish. Then tap the card to check.</p>`}
+      ${shown&&first?`<p class="muted" style="text-align:center">First look: read it, tap the card to hear it, then say it out loud.</p>`:""}
       <div class="pager">${cards.map((_,j)=>`<i class="${j===k?"on":""}"></i>`).join("")}</div></div>`;
     const card=$("#card");
     card.onclick=()=>{ if(!shown){shown=true;draw();say(c.es)} else say(c.es) };
     card.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();card.onclick()}};
     if(shown){
-      $("#again").onclick=()=>{cards.push(cards.splice(k,1)[0]); shown=false; draw()};
-      $("#know").onclick=()=>{ k++; shown=false; if(k>=cards.length) return warmDone(); draw()};
+      $("#again").onclick=()=>{cards.push(cards.splice(k,1)[0]); shown=first; draw()};
+      $("#know").onclick=()=>{ k++; shown=first; if(k>=cards.length) return warmDone(); draw()};
     }
   };
   const warmDone=()=>{
